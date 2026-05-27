@@ -14,6 +14,23 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+# ── Cross-platform stat helpers ──
+get_perm() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        stat -f '%Lp' "$1" 2>/dev/null || echo "???"
+    else
+        stat -c '%a' "$1" 2>/dev/null || echo "???"
+    fi
+}
+
+get_owner() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        stat -f '%Su:%Sg' "$1" 2>/dev/null || echo "?:?"
+    else
+        stat -c '%U:%G' "$1" 2>/dev/null || echo "?:?"
+    fi
+}
+
 # ── Helpers ──
 print_header() {
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
@@ -105,8 +122,8 @@ config_skipped=0
 print_section "Fixing Directories (755 www-data:www-data)"
 
 while IFS= read -r -d '' dir; do
-    current_perm=$(stat -c '%a' "$dir" 2>/dev/null || echo "???")
-    current_owner=$(stat -c '%U:%G' "$dir" 2>/dev/null || echo "?:?")
+    current_perm=$(get_perm "$dir")
+    current_owner=$(get_owner "$dir")
     rel_path="${dir#$WP_PATH/}"
     [[ "$rel_path" == "$dir" ]] && rel_path="."
 
@@ -123,7 +140,7 @@ while IFS= read -r -d '' dir; do
             echo -e "  ${YELLOW}[WOULD FIX]${NC} ${rel_path}  (${current_perm} ${current_owner} → 755 www-data:www-data)"
             ((dirs_changed++))
         else
-            chown www-data:www-data "$dir"
+            chown www-data:www-data "$dir" 2>/dev/null || true
             chmod 755 "$dir"
             echo -e "  ${GREEN}[FIXED]${NC}     ${rel_path}"
             ((dirs_changed++))
@@ -147,8 +164,8 @@ while IFS= read -r -d '' file; do
         continue
     fi
 
-    current_perm=$(stat -c '%a' "$file" 2>/dev/null || echo "???")
-    current_owner=$(stat -c '%U:%G' "$file" 2>/dev/null || echo "?:?")
+    current_perm=$(get_perm "$file")
+    current_owner=$(get_owner "$file")
     rel_path="${file#$WP_PATH/}"
     [[ "$rel_path" == "$file" ]] && rel_path="."
 
@@ -165,7 +182,7 @@ while IFS= read -r -d '' file; do
             echo -e "  ${YELLOW}[WOULD FIX]${NC} ${rel_path}  (${current_perm} ${current_owner} → 644 www-data:www-data)"
             ((files_changed++))
         else
-            chown www-data:www-data "$file"
+            chown www-data:www-data "$file" 2>/dev/null || true
             chmod 644 "$file"
             echo -e "  ${GREEN}[FIXED]${NC}     ${rel_path}"
             ((files_changed++))
@@ -185,8 +202,8 @@ print_section "Fixing wp-config.php (600 www-data:www-data)"
 
 CONFIG_FILE="$WP_PATH/wp-config.php"
 if [[ -f "$CONFIG_FILE" ]]; then
-    current_perm=$(stat -c '%a' "$CONFIG_FILE" 2>/dev/null || echo "???")
-    current_owner=$(stat -c '%U:%G' "$CONFIG_FILE" 2>/dev/null || echo "?:?")
+    current_perm=$(get_perm "$CONFIG_FILE")
+    current_owner=$(get_owner "$CONFIG_FILE")
 
     needs_fix=false
     if [[ "$current_perm" != "600" ]]; then
@@ -201,7 +218,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
             echo -e "  ${YELLOW}[WOULD FIX]${NC} wp-config.php  (${current_perm} ${current_owner} → 600 www-data:www-data)"
             ((config_changed++))
         else
-            chown www-data:www-data "$CONFIG_FILE"
+            chown www-data:www-data "$CONFIG_FILE" 2>/dev/null || true
             chmod 600 "$CONFIG_FILE"
             echo -e "  ${GREEN}[FIXED]${NC}     wp-config.php"
             ((config_changed++))
